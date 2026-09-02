@@ -6,7 +6,7 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner atau Administrator dapat mencatat transaksi melalui `/transaction add`.
 
-Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat mengambil ticket dengan tombol **Claim Ticket** atau menutupnya dengan tombol **Tutup Ticket**. Saat ticket ditutup, bot membuat transcript HTML dari seluruh chat dan mengirimkannya melalui DM kepada pemilik ticket.
+Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat mengambil ticket dengan tombol **Claim Ticket** atau menutupnya dengan tombol **Tutup Ticket**. Saat ticket ditutup, bot membuat transcript HTML dari seluruh chat dan mengirimkannya melalui DM kepada pemilik ticket bersama tombol rating 1–5. Hasil rating dikirim ke `RATING_CHANNEL_ID`. Ticket yang tidak aktif akan ditutup otomatis sesuai `AUTO_CLOSE_HOURS`, dengan default 72 jam. Transaksi baru dikirim dengan status menunggu persetujuan dan memiliki tombol Terima/Tolak untuk Owner atau Administrator.
 
 Untuk menguji tampilan tanpa menunggu member masuk atau keluar, administrator dapat menggunakan `/test welcome` dan `/test goodbye`. Target member dapat dipilih sebagai opsi command; jika dikosongkan, bot menggunakan akun administrator yang menjalankan command. Pemilik ticket harus membuka DM dari server agar transcript dapat diterima.
 
@@ -26,6 +26,8 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 | `GUILD_ID` | ID server Discord. Jika diisi, slash command tersinkron lebih cepat ke server tersebut. |
 | `STORE_CHANNEL_ID` | Channel untuk mengirim status toko. |
 | `TRANSACTION_CHANNEL_ID` | Channel privat untuk menyimpan log transaksi. |
+| `RATING_CHANNEL_ID` | Channel untuk menerima hasil rating ticket. |
+| `AUTO_CLOSE_HOURS` | Lama ticket tidak aktif sebelum ditutup otomatis; default `72` jam. |
 | `WELCOME_CHANNEL_ID` | Channel welcome member baru. |
 | `GOODBYE_CHANNEL_ID` | Channel goodbye member yang keluar. |
 | `TICKET_CATEGORY_ID` | Kategori tempat channel ticket dibuat. |

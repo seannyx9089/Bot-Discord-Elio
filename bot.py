@@ -11,7 +11,7 @@ from pathlib import Path
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("elio-market")
@@ -20,6 +20,8 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 STORE_CHANNEL_ID = int(os.getenv("STORE_CHANNEL_ID", "0"))
 TRANSACTION_CHANNEL_ID = int(os.getenv("TRANSACTION_CHANNEL_ID", "0"))
+RATING_CHANNEL_ID = int(os.getenv("RATING_CHANNEL_ID", "0"))
+AUTO_CLOSE_HOURS = float(os.getenv("AUTO_CLOSE_HOURS", "72"))
 WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
 GOODBYE_CHANNEL_ID = int(os.getenv("GOODBYE_CHANNEL_ID", "0"))
 TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID", "0"))
@@ -124,6 +126,54 @@ async def make_transcript(channel: discord.TextChannel) -> bytes:
     return html.encode("utf-8")
 
 
+class RatingView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=86400)
+        for score in range(1, 6):
+            button = discord.ui.Button(label=f"{score}/5", style=discord.ButtonStyle.primary, custom_id=f"rating:{score}")
+            button.callback = self.make_callback(score)
+            self.add_item(button)
+
+    def make_callback(self, score: int):
+        async def callback(interaction: discord.Interaction):
+            guild = bot.get_guild(GUILD_ID) if GUILD_ID else None
+            channel = guild.get_channel(RATING_CHANNEL_ID) if guild and RATING_CHANNEL_ID else None
+            if isinstance(channel, discord.TextChannel):
+                await channel.send(f"⭐ Rating ticket: **{score}/5** dari {interaction.user.mention} (`{interaction.user}`)")
+            await interaction.response.send_message(f"Terima kasih, rating kamu **{score}/5** sudah diterima.", ephemeral=True)
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(view=self)
+        return callback
+
+
+class TransactionApprovalView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Terima", style=discord.ButtonStyle.success, emoji="✅", custom_id="transaction:accept")
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
+            return await interaction.response.send_message("Hanya Owner atau Administrator yang dapat menyetujui transaksi.", ephemeral=True)
+        embed = interaction.message.embeds[0]
+        embed.title = "✅ Transaksi Berhasil"
+        embed.color = discord.Color.green()
+        button.disabled = True
+        self.children[1].disabled = True
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Tolak", style=discord.ButtonStyle.danger, emoji="❌", custom_id="transaction:reject")
+    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
+            return await interaction.response.send_message("Hanya Owner atau Administrator yang dapat menolak transaksi.", ephemeral=True)
+        embed = interaction.message.embeds[0]
+        embed.title = "❌ Transaksi Ditolak"
+        embed.color = discord.Color.red()
+        button.disabled = True
+        self.children[0].disabled = True
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
 class CloseTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -159,7 +209,7 @@ class CloseTicketView(discord.ui.View):
                     owner = None
             if owner:
                 try:
-                    await owner.send(content=f"Transcript ticket **#{channel.name}** dari Elio Market terlampir.", file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"))
+                    await owner.send(content=f"Ticket **#{channel.name}** sudah ditutup. Berikan rating pelayanan dengan tombol di bawah. Transcript terlampir.", file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"), view=RatingView())
                     dm_sent = True
                 except discord.HTTPException:
                     dm_sent = False
@@ -294,8 +344,8 @@ class TransactionModal(discord.ui.Modal, title="Catat Transaksi Elio Market"):
         embed.add_field(name="Dicatat oleh", value=f"{interaction.user.mention}\n`{interaction.user.name}`", inline=True)
         embed.add_field(name="Waktu", value=now_text(), inline=False)
         embed.set_footer(text="Elio Market • Transaction Log")
-        await channel.send(embed=embed)
-        await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat.", ephemeral=True)
+        await channel.send(embed=embed, view=TransactionApprovalView())
+        await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat dan menunggu persetujuan admin.", ephemeral=True)
 
 
 transaction = app_commands.Group(name="transaction", description="Catat transaksi Elio Market")
@@ -309,11 +359,45 @@ async def transaction_add(interaction: discord.Interaction):
     await interaction.response.send_modal(TransactionModal(source_ticket))
 
 
+@tasks.loop(hours=1)
+async def auto_close_tickets():
+    if not TICKET_CATEGORY_ID:
+        return
+    category = bot.get_channel(TICKET_CATEGORY_ID)
+    if not isinstance(category, discord.CategoryChannel):
+        return
+    cutoff = datetime.now(timezone.utc).timestamp() - (AUTO_CLOSE_HOURS * 3600)
+    for channel in list(category.text_channels):
+        try:
+            recent = [message async for message in channel.history(limit=1)]
+            if not recent or recent[0].created_at.timestamp() > cutoff:
+                continue
+            transcript = await make_transcript(channel)
+            owner_id = ticket_owner_id(channel)
+            owner = category.guild.get_member(owner_id) if owner_id else None
+            if owner:
+                try:
+                    await owner.send(content=f"Ticket **#{channel.name}** ditutup otomatis karena tidak aktif. Transcript terlampir.", file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"), view=RatingView())
+                except discord.HTTPException:
+                    pass
+            await channel.delete(reason=f"Auto-close setelah {AUTO_CLOSE_HOURS} jam tidak aktif")
+        except (discord.Forbidden, discord.HTTPException) as error:
+            log.warning("Auto-close gagal untuk %s: %s", channel, error)
+
+
+@auto_close_tickets.before_loop
+async def before_auto_close():
+    await bot.wait_until_ready()
+
+
 @bot.event
 async def on_ready():
     bot.add_view(StoreView())
     bot.add_view(TicketView())
     bot.add_view(CloseTicketView())
+    bot.add_view(TransactionApprovalView())
+    if not auto_close_tickets.is_running():
+        auto_close_tickets.start()
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
         synced = await bot.tree.sync(guild=guild)
