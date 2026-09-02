@@ -6,13 +6,15 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 Bot menyediakan tiga perintah pengaturan administrator. Perintah `/setup store` mengirim panel kontrol dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
 
-Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Gambar welcome dan goodbye dapat ditambahkan melalui URL langsung pada environment variable. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat menutup ticket dengan tombol **Tutup Ticket**.
+Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat menutup ticket dengan tombol **Tutup Ticket**.
+
+Untuk menguji tampilan tanpa menunggu member masuk atau keluar, administrator dapat menggunakan `/test welcome` dan `/test goodbye`. Target member dapat dipilih sebagai opsi command; jika dikosongkan, bot menggunakan akun administrator yang menjalankan command.
 
 ## Persiapan Discord Developer Portal
 
 Buat Application di [Discord Developer Portal](https://discord.com/developers/applications), masuk ke menu **Bot**, lalu salin token bot. Jangan pernah memasukkan token ke file yang akan diunggah ke GitHub. Pada bagian **Privileged Gateway Intents**, aktifkan **Server Members Intent** karena fitur welcome/goodbye membutuhkan event member.
 
-Undang bot ke server menggunakan OAuth2 URL Generator dengan scopes `bot` dan `applications.commands`. Permission minimum yang dibutuhkan adalah View Channels, Send Messages, Embed Links, Read Message History, Manage Channels, serta Manage Roles jika konfigurasi role memerlukannya. Setelah bot masuk, aktifkan Developer Mode di Discord, lalu salin ID server, channel, kategori ticket, dan role staff.
+Undang bot ke server menggunakan OAuth2 URL Generator dengan scopes `bot` dan `applications.commands`. Permission minimum yang dibutuhkan adalah View Channels, Send Messages, Embed Links, Read Message History, Manage Channels, serta Manage Roles jika konfigurasi role memerlukannya. Setelah bot masuk, aktifkan Developer Mode di Discord, lalu salin ID server, channel, kategori ticket, dan role staff. Pastikan permission **Send Messages**, **Embed Links**, dan **View Channel** diberikan pada channel welcome/goodbye.
 
 ## Konfigurasi lokal atau Railway
 

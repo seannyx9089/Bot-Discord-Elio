@@ -170,31 +170,68 @@ async def on_ready():
         log.info("Logged in as %s; synced global commands", bot.user)
 
 
+def welcome_embed(member: discord.Member) -> discord.Embed:
+    embed = discord.Embed(
+        title="👋 Welcome to Elio Market",
+        description=(f"Halo {member.mention}, selamat datang di **Elio Market - Market Digital!**\n\n"
+                     "**Info Member:**\n"
+                     f"• **Username:** `{member.name}`\n"
+                     f"• **Total Member:** `{member.guild.member_count}`"),
+        color=discord.Color.from_rgb(126, 52, 220),
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_footer(text=f"Elio Market • Digital Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    return embed
+
+
+def goodbye_embed(member: discord.Member) -> discord.Embed:
+    embed = discord.Embed(
+        title="👋 Goodbye from Elio Market",
+        description=(f"**{member.name}** telah meninggalkan **Elio Market - Market Digital.**\n\n"
+                     "Semoga sukses selalu dan sampai jumpa kembali."),
+        color=discord.Color.from_rgb(126, 52, 220),
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="Info Member", value=f"• **Username:** `{member.name}`\n• **Total Member:** `{member.guild.member_count}`", inline=False)
+    embed.set_footer(text=f"Elio Market • Digital Store | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    return embed
+
+
 @bot.event
 async def on_member_join(member: discord.Member):
     channel = member.guild.get_channel(WELCOME_CHANNEL_ID) if WELCOME_CHANNEL_ID else None
-    if not isinstance(channel, discord.TextChannel):
-        return
-    embed = discord.Embed(title="Selamat Datang di Elio Market", description=f"Halo {member.mention}, selamat bergabung di server kami. Silakan baca informasi server dan hubungi staff jika membutuhkan bantuan.", color=discord.Color.green())
-    embed.set_thumbnail(url=member.display_avatar.url)
-    welcome_image = os.getenv("WELCOME_IMAGE_URL", "")
-    if welcome_image:
-        embed.set_image(url=welcome_image)
-    embed.set_footer(text=f"Member ke-{member.guild.member_count} • Elio Market")
-    await channel.send(embed=embed)
+    if isinstance(channel, discord.TextChannel):
+        await channel.send(embed=welcome_embed(member))
 
 
 @bot.event
 async def on_member_remove(member: discord.Member):
     channel = member.guild.get_channel(GOODBYE_CHANNEL_ID) if GOODBYE_CHANNEL_ID else None
-    if not isinstance(channel, discord.TextChannel):
-        return
-    embed = discord.Embed(title="Sampai Jumpa", description=f"{member.name} telah meninggalkan Elio Market. Semoga sukses selalu.", color=discord.Color.orange())
-    goodbye_image = os.getenv("GOODBYE_IMAGE_URL", "")
-    if goodbye_image:
-        embed.set_image(url=goodbye_image)
-    embed.set_footer(text="Elio Market")
-    await channel.send(embed=embed)
+    if isinstance(channel, discord.TextChannel):
+        await channel.send(embed=goodbye_embed(member))
+
+
+test = app_commands.Group(name="test", description="Uji coba pesan welcome dan goodbye")
+
+
+@test.command(name="welcome", description="Kirim contoh pesan welcome")
+@app_commands.checks.has_permissions(administrator=True)
+async def test_welcome(interaction: discord.Interaction, member: discord.Member | None = None):
+    target = member or interaction.user
+    if not isinstance(target, discord.Member):
+        return await interaction.response.send_message("Member tidak ditemukan.", ephemeral=True)
+    await interaction.channel.send(embed=welcome_embed(target))
+    await interaction.response.send_message("Contoh welcome berhasil dikirim.", ephemeral=True)
+
+
+@test.command(name="goodbye", description="Kirim contoh pesan goodbye")
+@app_commands.checks.has_permissions(administrator=True)
+async def test_goodbye(interaction: discord.Interaction, member: discord.Member | None = None):
+    target = member or interaction.user
+    if not isinstance(target, discord.Member):
+        return await interaction.response.send_message("Member tidak ditemukan.", ephemeral=True)
+    await interaction.channel.send(embed=goodbye_embed(target))
+    await interaction.response.send_message("Contoh goodbye berhasil dikirim.", ephemeral=True)
 
 
 setup = app_commands.Group(name="setup", description="Pengaturan panel Elio Market")
@@ -228,6 +265,7 @@ async def setup_status(interaction: discord.Interaction):
 
 
 bot.tree.add_command(setup, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
+bot.tree.add_command(test, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 
 
 @bot.tree.error
