@@ -4,7 +4,7 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 ## Fitur yang tersedia
 
-Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner dapat mencatat transaksi melalui `/transaction add`.
+Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner atau Administrator dapat mencatat transaksi melalui `/transaction add`.
 
 Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat mengambil ticket dengan tombol **Claim Ticket** atau menutupnya dengan tombol **Tutup Ticket**. Saat ticket ditutup, bot membuat transcript HTML dari seluruh chat dan mengirimkannya melalui DM kepada pemilik ticket.
 
@@ -41,7 +41,7 @@ Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.
 
 Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu Owner dapat menjalankan `/market open` atau `/market close`, `/setup ticket`, dan `/transaction add` pada channel yang diinginkan.
 
-Semua command pengaturan (`/market`, `/setup`, `/test`, dan `/transaction`) dibatasi hanya untuk Owner server. Member biasa hanya dapat menggunakan panel ticket. Untuk mencatat transaksi, Owner menjalankan `/transaction add` di dalam ticket tipe **Beli**. Owner mengisi jenis transaksi dan harga; bot otomatis mengambil pembeli dari pemilik ticket, lalu menambahkan ID transaksi, username pembeli, ticket sumber, waktu, dan mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`.
+Command pengaturan dibatasi untuk Owner server; pencatatan transaksi dapat dilakukan oleh Owner atau Administrator. Member biasa hanya dapat menggunakan panel ticket. Pada form `/transaction add`, pengisi memasukkan mention atau ID Buyer, nama Produk, dan Harga secara manual. Bot otomatis menambahkan ID transaksi, Staff dari akun yang menjalankan command, serta waktu, lalu mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`. Jika command dijalankan di dalam ticket Beli, nama ticket sumber juga ikut dicatat.
 
 ## Catatan penting
 

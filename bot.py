@@ -66,6 +66,10 @@ def is_owner(member: discord.Member) -> bool:
     return member.guild.owner_id == member.id
 
 
+def is_owner_or_admin(member: discord.Member) -> bool:
+    return is_owner(member) or member.guild_permissions.administrator
+
+
 def owner_only():
     async def predicate(interaction: discord.Interaction) -> bool:
         return isinstance(interaction.user, discord.Member) and is_owner(interaction.user)
@@ -234,27 +238,44 @@ async def publish_store(guild: discord.Guild | None, status: str):
 
 
 class TransactionModal(discord.ui.Modal, title="Catat Transaksi Elio Market"):
-    def __init__(self, buyer: discord.Member, source_ticket: discord.TextChannel):
+    def __init__(self, source_ticket: discord.TextChannel | None = None):
         super().__init__()
-        self.buyer = buyer
         self.source_ticket = source_ticket
 
-    transaction_type = discord.ui.TextInput(
-        label="Jenis transaksi",
-        placeholder="Contoh: Pembelian Nitro / Hosting / Jual Produk",
+    buyer_input = discord.ui.TextInput(
+        label="Buyer (mention atau ID)",
+        placeholder="Contoh: @NamaBuyer atau 123456789012345678",
+        max_length=100,
+        required=True,
+    )
+    product = discord.ui.TextInput(
+        label="Produk",
+        placeholder="Contoh: SETUP BOT",
         max_length=100,
         required=True,
     )
     price = discord.ui.TextInput(
         label="Harga",
-        placeholder="Contoh: 50000 atau Rp 50.000",
+        placeholder="Contoh: 19000 atau Rp 19.000",
         max_length=30,
         required=True,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        if not isinstance(interaction.user, discord.Member) or not is_owner(interaction.user):
-            return await interaction.response.send_message("Hanya Owner server yang dapat mencatat transaksi.", ephemeral=True)
+        if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
+            return await interaction.response.send_message("Hanya Owner atau Administrator server yang dapat mencatat transaksi.", ephemeral=True)
+        buyer_id_match = re.search(r"<@!?(\d{15,25})>", self.buyer_input.value.strip())
+        buyer_id_text = buyer_id_match.group(1) if buyer_id_match else self.buyer_input.value.strip()
+        if not buyer_id_text.isdigit():
+            return await interaction.response.send_message("Buyer harus berupa mention member atau ID Discord yang valid.", ephemeral=True)
+        buyer = interaction.guild.get_member(int(buyer_id_text)) if interaction.guild else None
+        if buyer is None and interaction.guild:
+            try:
+                buyer = await interaction.guild.fetch_member(int(buyer_id_text))
+            except discord.HTTPException:
+                buyer = None
+        if buyer is None:
+            return await interaction.response.send_message("Buyer tidak ditemukan di server ini.", ephemeral=True)
         channel = interaction.guild.get_channel(TRANSACTION_CHANNEL_ID) if interaction.guild and TRANSACTION_CHANNEL_ID else interaction.channel
         if not isinstance(channel, discord.TextChannel):
             return await interaction.response.send_message("`TRANSACTION_CHANNEL_ID` belum benar atau channel transaksi tidak ditemukan.", ephemeral=True)
@@ -265,10 +286,11 @@ class TransactionModal(discord.ui.Modal, title="Catat Transaksi Elio Market"):
         transaction_id = f"TRX-{datetime.now(timezone.utc):%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
         embed = discord.Embed(title="💳 Transaksi Baru", color=discord.Color.green(), timestamp=datetime.now(timezone.utc))
         embed.add_field(name="ID Transaksi", value=f"`{transaction_id}`", inline=False)
-        embed.add_field(name="Jenis Transaksi", value=self.transaction_type.value, inline=False)
+        embed.add_field(name="Produk", value=self.product.value, inline=False)
         embed.add_field(name="Harga", value=f"Rp {amount:,}".replace(",", "."), inline=True)
-        embed.add_field(name="Pembeli", value=f"{self.buyer.mention}\n`{self.buyer.name}`", inline=True)
-        embed.add_field(name="Ticket", value=f"{self.source_ticket.mention}\n`{self.source_ticket.name}`", inline=True)
+        embed.add_field(name="Buyer", value=f"{buyer.mention}\n`{buyer.name}`", inline=True)
+        if self.source_ticket:
+            embed.add_field(name="Ticket", value=f"{self.source_ticket.mention}\n`{self.source_ticket.name}`", inline=True)
         embed.add_field(name="Dicatat oleh", value=f"{interaction.user.mention}\n`{interaction.user.name}`", inline=True)
         embed.add_field(name="Waktu", value=now_text(), inline=False)
         embed.set_footer(text="Elio Market • Transaction Log")
@@ -281,22 +303,10 @@ transaction = app_commands.Group(name="transaction", description="Catat transaks
 
 @transaction.command(name="add", description="Catat transaksi dari ticket Beli")
 async def transaction_add(interaction: discord.Interaction):
-    if not isinstance(interaction.user, discord.Member) or not is_owner(interaction.user):
-        return await interaction.response.send_message("Hanya Owner server yang dapat mencatat transaksi.", ephemeral=True)
-    if not isinstance(interaction.channel, discord.TextChannel) or not interaction.channel.name.startswith("buy-"):
-        return await interaction.response.send_message("Gunakan `/transaction add` di dalam ticket tipe **Beli**.", ephemeral=True)
-    owner_id = ticket_owner_id(interaction.channel)
-    if not owner_id:
-        return await interaction.response.send_message("Pemilik ticket tidak dapat ditemukan dari konfigurasi ticket ini.", ephemeral=True)
-    buyer = interaction.guild.get_member(owner_id) if interaction.guild else None
-    if buyer is None and interaction.guild:
-        try:
-            buyer = await interaction.guild.fetch_member(owner_id)
-        except discord.HTTPException:
-            buyer = None
-    if buyer is None:
-        return await interaction.response.send_message("Member pembeli sudah tidak ditemukan di server.", ephemeral=True)
-    await interaction.response.send_modal(TransactionModal(buyer, interaction.channel))
+    if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
+        return await interaction.response.send_message("Hanya Owner atau Administrator server yang dapat mencatat transaksi.", ephemeral=True)
+    source_ticket = interaction.channel if isinstance(interaction.channel, discord.TextChannel) and interaction.channel.name.startswith("buy-") else None
+    await interaction.response.send_modal(TransactionModal(source_ticket))
 
 
 @bot.event
