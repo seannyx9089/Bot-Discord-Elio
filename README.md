@@ -4,7 +4,7 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 ## Fitur yang tersedia
 
-Bot menyediakan command status toko langsung: `/store status open` untuk membuka toko dan `/store status close` untuk menutup toko. Command `/setup store` tetap tersedia sebagai panel alternatif dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
+Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Command `/setup store` tetap tersedia sebagai panel alternatif dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
 
 Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat menutup ticket dengan tombol **Tutup Ticket**.
 
@@ -38,7 +38,7 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 
 Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.env.example`, dan `README.md`. Jangan unggah file `.env` atau token. Di Railway, pilih **New Project**, kemudian **Deploy from GitHub Repo** dan pilih repository tersebut. Railway akan membaca `requirements.txt` dan menjalankan proses dari `Procfile`.
 
-Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu administrator dapat menjalankan `/store status open` atau `/store status close`, kemudian menjalankan `/setup ticket` pada channel yang diinginkan.
+Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu administrator dapat menjalankan `/market open` atau `/market close`, kemudian menjalankan `/setup ticket` pada channel yang diinginkan.
 
 ## Catatan penting
 

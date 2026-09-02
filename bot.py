@@ -244,20 +244,23 @@ async def test_goodbye(interaction: discord.Interaction, member: discord.Member 
     await interaction.response.send_message("Contoh goodbye berhasil dikirim.", ephemeral=True)
 
 
-store = app_commands.Group(name="store", description="Kontrol status toko Elio Market")
+market = app_commands.Group(name="market", description="Kontrol status toko Elio Market")
 
 
-@store.command(name="status", description="Buka atau tutup Elio Market")
-@app_commands.choices(status=[
-    app_commands.Choice(name="open", value="open"),
-    app_commands.Choice(name="close", value="close"),
-])
+@market.command(name="open", description="Buka Elio Market")
 @app_commands.checks.has_permissions(administrator=True)
-async def store_status(interaction: discord.Interaction, status: app_commands.Choice[str]):
-    save_state(status.value)
-    await publish_store(interaction.guild, status.value)
-    label = "OPEN" if status.value == "open" else "CLOSED"
-    await interaction.response.send_message(f"Status Elio Market berhasil diubah menjadi **{label}**.", ephemeral=True)
+async def market_open(interaction: discord.Interaction):
+    save_state("open")
+    await publish_store(interaction.guild, "open")
+    await interaction.response.send_message("Elio Market berhasil dibuka: **OPEN**.", ephemeral=True)
+
+
+@market.command(name="close", description="Tutup Elio Market")
+@app_commands.checks.has_permissions(administrator=True)
+async def market_close(interaction: discord.Interaction):
+    save_state("closed")
+    await publish_store(interaction.guild, "closed")
+    await interaction.response.send_message("Elio Market berhasil ditutup: **CLOSED**.", ephemeral=True)
 
 
 setup = app_commands.Group(name="setup", description="Pengaturan panel Elio Market")
@@ -290,7 +293,7 @@ async def setup_status(interaction: discord.Interaction):
     await interaction.response.send_message("Status toko berhasil dikirim.", ephemeral=True)
 
 
-bot.tree.add_command(store, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
+bot.tree.add_command(market, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(setup, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(test, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 
