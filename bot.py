@@ -106,31 +106,41 @@ class TicketSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Ticket hanya dapat dibuat di server.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
         selected = self.values[0]
         label, emoji, _ = TICKET_TYPES[selected]
         existing = discord.utils.get(interaction.guild.text_channels, name=f"{selected}-{clean_name(interaction.user.name)}")
         if existing:
-            return await interaction.response.send_message(f"Ticket kamu sudah ada: {existing.mention}", ephemeral=True)
+            return await interaction.edit_original_response(content=f"Ticket kamu sudah ada: {existing.mention}")
 
         category = interaction.guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
-        if category and not isinstance(category, discord.CategoryChannel):
-            category = None
+        if TICKET_CATEGORY_ID and not isinstance(category, discord.CategoryChannel):
+            return await interaction.edit_original_response(content="`TICKET_CATEGORY_ID` salah atau bot tidak dapat melihat kategori tersebut. Masukkan ID kategori Discord yang benar di Railway Variables.")
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID) if STAFF_ROLE_ID else None
+        bot_member = interaction.guild.me
+        if bot_member is None:
+            return await interaction.edit_original_response(content="Bot tidak terdeteksi sebagai member server. Pastikan bot masih berada di server.")
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-            interaction.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+            bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
         }
         if staff_role:
             overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
-        channel = await interaction.guild.create_text_channel(
-            name=f"{selected}-{clean_name(interaction.user.name)}", category=category, overwrites=overwrites,
-            topic=f"Ticket {label} milik {interaction.user} ({interaction.user.id})",
-        )
-        embed = discord.Embed(title=f"{emoji} Ticket {label}", description=f"Halo {interaction.user.mention}, silakan jelaskan kebutuhanmu secara lengkap. Staff Elio Market akan segera membantu.", color=discord.Color.blurple())
-        embed.set_footer(text="Elio Market • Ticket Support")
-        await channel.send(content=interaction.user.mention, embed=embed, view=CloseTicketView())
-        await interaction.response.send_message(f"Ticket berhasil dibuat: {channel.mention}", ephemeral=True)
+        try:
+            channel = await interaction.guild.create_text_channel(
+                name=f"{selected}-{clean_name(interaction.user.name)}", category=category, overwrites=overwrites,
+                topic=f"Ticket {label} milik {interaction.user} ({interaction.user.id})",
+            )
+            embed = discord.Embed(title=f"{emoji} Ticket {label}", description=f"Halo {interaction.user.mention}, silakan jelaskan kebutuhanmu secara lengkap. Staff Elio Market akan segera membantu.", color=discord.Color.blurple())
+            embed.set_footer(text="Elio Market • Ticket Support")
+            await channel.send(content=interaction.user.mention, embed=embed, view=CloseTicketView())
+        except discord.Forbidden:
+            return await interaction.edit_original_response(content="Bot tidak memiliki permission untuk membuat ticket. Berikan **Manage Channels**, **View Channel**, **Send Messages**, dan **Embed Links** pada bot/kategori ticket.")
+        except discord.HTTPException as error:
+            log.error("Ticket creation failed: %s", error)
+            return await interaction.edit_original_response(content="Discord menolak pembuatan ticket. Periksa ID kategori dan permission bot, lalu coba lagi.")
+        await interaction.edit_original_response(content=f"Ticket berhasil dibuat: {channel.mention}")
 
 
 class TicketView(discord.ui.View):
