@@ -6,10 +6,12 @@ import os
 import re
 import uuid
 from html import escape
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 
 import discord
+import pymysql
 from discord import app_commands
 from discord.ext import commands, tasks
 
@@ -42,7 +44,43 @@ def now_text() -> str:
     return discord.utils.format_dt(datetime.now(timezone.utc), style="F")
 
 
+def mysql_connection():
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        parsed = urlparse(database_url)
+        return pymysql.connect(host=parsed.hostname, port=parsed.port or 3306, user=parsed.username, password=parsed.password, database=parsed.path.lstrip("/"), autocommit=True)
+    if not os.getenv("MYSQLHOST"):
+        return None
+    return pymysql.connect(host=os.getenv("MYSQLHOST"), port=int(os.getenv("MYSQLPORT", "3306")), user=os.getenv("MYSQLUSER"), password=os.getenv("MYSQLPASSWORD"), database=os.getenv("MYSQLDATABASE"), autocommit=True)
+
+
+def init_db() -> None:
+    conn = mysql_connection()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE IF NOT EXISTS bot_config (config_key VARCHAR(100) PRIMARY KEY, config_value VARCHAR(255) NOT NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS store_state (id TINYINT PRIMARY KEY, status VARCHAR(20) NOT NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY, transaction_code VARCHAR(40) UNIQUE NOT NULL, buyer_id BIGINT NOT NULL, buyer_name VARCHAR(255) NOT NULL, product VARCHAR(255) NOT NULL, price BIGINT NOT NULL, staff_id BIGINT NOT NULL, staff_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'PENDING')")
+            cursor.execute("CREATE TABLE IF NOT EXISTS ratings (id BIGINT AUTO_INCREMENT PRIMARY KEY, guild_id BIGINT NOT NULL, user_id BIGINT NOT NULL, score TINYINT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    finally:
+        conn.close()
+
+
 def load_state() -> str:
+    conn = mysql_connection()
+    if conn:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT status FROM store_state WHERE id=1")
+                row = cursor.fetchone()
+                if row:
+                    return row[0]
+        except pymysql.MySQLError as error:
+            log.warning("MySQL state read failed: %s", error)
+        finally:
+            conn.close()
     try:
         return json.loads(DATA_FILE.read_text()).get("status", os.getenv("STORE_DEFAULT_STATUS", "open"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -50,8 +88,44 @@ def load_state() -> str:
 
 
 def save_state(status: str) -> None:
+    conn = mysql_connection()
+    if conn:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("INSERT INTO store_state (id, status) VALUES (1, %s) ON DUPLICATE KEY UPDATE status=VALUES(status)", (status,))
+            return
+        except pymysql.MySQLError as error:
+            log.warning("MySQL state write failed: %s", error)
+        finally:
+            conn.close()
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     DATA_FILE.write_text(json.dumps({"status": status}, indent=2))
+
+
+def save_transaction(code: str, buyer: discord.Member, product: str, price: int, staff: discord.Member) -> None:
+    conn = mysql_connection()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO transactions (transaction_code, buyer_id, buyer_name, product, price, staff_id, staff_name) VALUES (%s, %s, %s, %s, %s, %s, %s)", (code, buyer.id, str(buyer), product, price, staff.id, str(staff)))
+    except pymysql.MySQLError as error:
+        log.warning("MySQL transaction write failed: %s", error)
+    finally:
+        conn.close()
+
+
+def save_rating(guild_id: int, user_id: int, score: int) -> None:
+    conn = mysql_connection()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO ratings (guild_id, user_id, score) VALUES (%s, %s, %s)", (guild_id, user_id, score))
+    except pymysql.MySQLError as error:
+        log.warning("MySQL rating write failed: %s", error)
+    finally:
+        conn.close()
 
 
 def clean_name(name: str) -> str:
@@ -60,6 +134,16 @@ def clean_name(name: str) -> str:
 
 
 def load_config() -> dict:
+    conn = mysql_connection()
+    if conn:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT config_key, config_value FROM bot_config")
+                return {key: int(value) if str(value).isdigit() else value for key, value in cursor.fetchall()}
+        except pymysql.MySQLError as error:
+            log.warning("MySQL config read failed: %s", error)
+        finally:
+            conn.close()
     try:
         return json.loads(CONFIG_FILE.read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -70,6 +154,17 @@ BOT_CONFIG = load_config()
 
 
 def save_config() -> None:
+    conn = mysql_connection()
+    if conn:
+        try:
+            with conn.cursor() as cursor:
+                for key, value in BOT_CONFIG.items():
+                    cursor.execute("INSERT INTO bot_config (config_key, config_value) VALUES (%s, %s) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", (key, str(value)))
+            return
+        except pymysql.MySQLError as error:
+            log.warning("MySQL config write failed: %s", error)
+        finally:
+            conn.close()
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(BOT_CONFIG, indent=2))
 
@@ -158,6 +253,8 @@ class RatingView(discord.ui.View):
         async def callback(interaction: discord.Interaction):
             guild = bot.get_guild(GUILD_ID) if GUILD_ID else None
             channel = guild.get_channel(RATING_CHANNEL_ID) if guild and RATING_CHANNEL_ID else None
+            if interaction.guild:
+                save_rating(interaction.guild.id, interaction.user.id, score)
             if isinstance(channel, discord.TextChannel):
                 await channel.send(f"⭐ Rating ticket: **{score}/5** dari {interaction.user.mention} (`{interaction.user}`)")
             await interaction.response.send_message(f"Terima kasih, rating kamu **{score}/5** sudah diterima.", ephemeral=True)
@@ -354,6 +451,7 @@ class TransactionModal(discord.ui.Modal, title="Catat Transaksi Elio Market"):
         embed.add_field(name="Dicatat oleh", value=f"{interaction.user.mention}\n`{interaction.user.name}`", inline=True)
         embed.add_field(name="Waktu", value=now_text(), inline=False)
         embed.set_footer(text="Elio Market • Transaction Log")
+        save_transaction(transaction_id, buyer, self.product.value, amount, interaction.user)
         await channel.send(embed=embed, view=TransactionApprovalView())
         await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat dan menunggu persetujuan admin.", ephemeral=True)
 
@@ -402,6 +500,9 @@ async def before_auto_close():
 
 @bot.event
 async def on_ready():
+    init_db()
+    BOT_CONFIG.clear()
+    BOT_CONFIG.update(load_config())
     bot.add_view(StoreView())
     bot.add_view(TicketView())
     bot.add_view(CloseTicketView())

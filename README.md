@@ -23,6 +23,12 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 | Variable | Keterangan |
 |---|---|
 | `DISCORD_TOKEN` | Token bot dari Discord Developer Portal. |
+| `MYSQLHOST` | Host MySQL Railway. |
+| `MYSQLPORT` | Port MySQL, biasanya `3306`. |
+| `MYSQLUSER` | Username MySQL Railway. |
+| `MYSQLPASSWORD` | Password MySQL Railway. |
+| `MYSQLDATABASE` | Nama database MySQL Railway. |
+| `DATABASE_URL` | Alternatif jika Railway menyediakan satu URL koneksi database. |
 | `GUILD_ID` | ID server Discord. Jika diisi, slash command tersinkron lebih cepat ke server tersebut. |
 | `STORE_CHANNEL_ID` | Channel untuk mengirim status toko. |
 | `TRANSACTION_CHANNEL_ID` | Channel privat untuk menyimpan log transaksi. |
@@ -50,7 +56,9 @@ Konfigurasi dari HP dapat dilakukan melalui `/ticket set owner` untuk menjadikan
 
 ## Catatan penting
 
-Status toko disimpan dalam `data/store.json`. Pada Railway, filesystem service dapat bersifat sementara ketika container dibuat ulang, sehingga status awal akan mengikuti `STORE_DEFAULT_STATUS` dan default-nya adalah `OPEN`. Fitur utama bot tetap berjalan, tetapi bila status harus permanen lintas redeploy, tahap berikutnya dapat ditambahkan database atau penyimpanan eksternal.
+Bot menggunakan MySQL sebagai penyimpanan utama jika variable `MYSQLHOST` atau `DATABASE_URL` tersedia. Saat pertama kali terhubung, bot membuat tabel `bot_config`, `store_state`, `transactions`, dan `ratings` secara otomatis. Status toko, konfigurasi Owner/Staff, transaksi, dan rating akan tersimpan di database sehingga tidak bergantung pada filesystem Railway. File lokal hanya digunakan sebagai fallback jika MySQL belum dikonfigurasi.
+
+Untuk menambahkan MySQL di Railway, buat service/database MySQL pada project yang sama lalu hubungkan variable MySQL ke service bot. Jika Railway otomatis menyediakan `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, dan `MYSQLDATABASE`, bot akan langsung menggunakannya. Setelah database terhubung, lakukan redeploy.
 
 Gambar contoh yang sudah dikirim dapat dijadikan referensi gaya embed status toko. Setelah contoh welcome/goodbye dikirim, teks, warna, judul, footer, dan layout embed dapat disesuaikan agar konsisten dengan branding Elio Market.
 
