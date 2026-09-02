@@ -1,8 +1,10 @@
 import asyncio
+import io
 import json
 import logging
 import os
 import re
+from html import escape
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,17 +87,69 @@ class StoreView(discord.ui.View):
         await interaction.response.send_message("Status Elio Market berhasil diubah menjadi **CLOSED**.", ephemeral=True)
 
 
+def ticket_owner_id(channel: discord.TextChannel) -> int | None:
+    match = re.search(r"\((\d{15,25})\)$", channel.topic or "")
+    return int(match.group(1)) if match else None
+
+
+async def make_transcript(channel: discord.TextChannel) -> bytes:
+    rows = []
+    async for message in channel.history(limit=None, oldest_first=True):
+        content = escape(message.content or "")
+        if message.attachments:
+            files = "<br>".join(f'<a href="{escape(a.url)}">{escape(a.filename)}</a>' for a in message.attachments)
+            content = f"{content}<br>{files}" if content else files
+        if not content:
+            content = "<em>(tidak ada teks)</em>"
+        timestamp = message.created_at.strftime("%d/%m/%Y %H:%M:%S UTC")
+        rows.append(f'<div class="message"><div class="meta"><strong>{escape(str(message.author))}</strong> <span>{timestamp}</span></div><div class="content">{content}</div></div>')
+    body = "".join(rows) or '<p class="empty">Belum ada pesan.</p>'
+    html = f'''<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Transcript {escape(channel.name)}</title><style>body{{font-family:Arial,sans-serif;background:#171525;color:#eee;margin:0;padding:24px}}.wrap{{max-width:900px;margin:auto}}h1{{color:#a98cff}}.message{{background:#27233d;border-left:4px solid #7e34dc;border-radius:8px;padding:12px 16px;margin:10px 0;overflow-wrap:anywhere}}.meta{{color:#d4c9ff}}.meta span{{color:#999;font-size:12px;margin-left:8px}}.content{{margin-top:6px;white-space:pre-wrap}}</style></head><body><div class="wrap"><h1>Elio Market — Transcript Ticket</h1><p>Channel: #{escape(channel.name)}<br>Dibuat: {escape(channel.created_at.strftime("%d/%m/%Y %H:%M:%S UTC"))}<br>Ditutup: {escape(datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S UTC"))}</p>{body}</div></body></html>'''
+    return html.encode("utf-8")
+
+
 class CloseTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+
+    @discord.ui.button(label="Claim Ticket", style=discord.ButtonStyle.primary, emoji="🙋", custom_id="ticket:claim")
+    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.user, discord.Member) or not is_staff(interaction.user):
+            return await interaction.response.send_message("Hanya staff yang dapat melakukan claim ticket.", ephemeral=True)
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await interaction.response.send_message("Channel ticket tidak ditemukan.", ephemeral=True)
+        await interaction.response.send_message(f"Ticket ini telah di-claim oleh {interaction.user.mention}.")
+        button.disabled = True
+        button.label = f"Di-claim: {interaction.user.display_name[:70]}"
+        await interaction.message.edit(view=self)
 
     @discord.ui.button(label="Tutup Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket:close")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not isinstance(interaction.user, discord.Member) or not is_staff(interaction.user):
             return await interaction.response.send_message("Hanya staff yang dapat menutup ticket.", ephemeral=True)
-        await interaction.response.send_message("Ticket akan ditutup dalam 5 detik.")
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await interaction.response.send_message("Channel ticket tidak ditemukan.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        channel = interaction.channel
+        transcript = await make_transcript(channel)
+        owner_id = ticket_owner_id(channel)
+        dm_sent = False
+        if owner_id:
+            owner = interaction.guild.get_member(owner_id) if interaction.guild else None
+            if owner is None and interaction.guild:
+                try:
+                    owner = await interaction.guild.fetch_member(owner_id)
+                except discord.HTTPException:
+                    owner = None
+            if owner:
+                try:
+                    await owner.send(content=f"Transcript ticket **#{channel.name}** dari Elio Market terlampir.", file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"))
+                    dm_sent = True
+                except discord.HTTPException:
+                    dm_sent = False
+        await interaction.edit_original_response(content=("Transcript berhasil dikirim ke DM pemilik ticket. Ticket akan ditutup dalam 5 detik." if dm_sent else "Ticket akan ditutup dalam 5 detik, tetapi DM transcript gagal dikirim. Pastikan DM pemilik ticket terbuka."))
         await asyncio.sleep(5)
-        await interaction.channel.delete(reason=f"Ticket ditutup oleh {interaction.user}")
+        await channel.delete(reason=f"Ticket ditutup oleh {interaction.user}")
 
 
 class TicketSelect(discord.ui.Select):
@@ -171,6 +225,7 @@ async def publish_store(guild: discord.Guild | None, status: str):
 async def on_ready():
     bot.add_view(StoreView())
     bot.add_view(TicketView())
+    bot.add_view(CloseTicketView())
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
         synced = await bot.tree.sync(guild=guild)
