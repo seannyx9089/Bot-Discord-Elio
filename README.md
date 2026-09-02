@@ -44,7 +44,7 @@ Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.
 
 Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu Owner dapat menjalankan `/market open` atau `/market close`, `/setup ticket`, dan `/transaction add` pada channel yang diinginkan.
 
-Command pengaturan dibatasi untuk Owner bot; pencatatan transaksi dapat dilakukan oleh Owner atau Administrator. Member biasa hanya dapat menggunakan panel ticket. Pada form `/transaction add`, pengisi memasukkan mention atau ID Buyer, nama Produk, dan Harga secara manual. Bot otomatis menambahkan ID transaksi, Staff dari akun yang menjalankan command, serta waktu, lalu mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`. Jika command dijalankan di dalam ticket Beli, nama ticket sumber juga ikut dicatat.
+Seluruh command bot dibatasi untuk Owner atau Administrator server. Member biasa tidak dapat menggunakan command, tetapi tetap dapat membuat ticket melalui panel. Pada form `/transaction add`, pengisi memasukkan Buyer, nama Produk, dan Harga secara manual. Bot otomatis menambahkan ID transaksi, Staff dari akun yang menjalankan command, serta waktu, lalu mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`. Jika command dijalankan di dalam ticket Beli, nama ticket sumber juga ikut dicatat.
 
 Konfigurasi dari HP dapat dilakukan melalui `/ticket set owner` untuk menjadikan akun yang menjalankan command sebagai Owner bot, lalu `/ticket set staff role` dengan memilih role dari daftar Discord. Cara ini tidak memerlukan penyalinan Role ID secara manual.
 

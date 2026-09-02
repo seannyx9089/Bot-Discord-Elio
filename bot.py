@@ -80,7 +80,7 @@ def configured_staff_role_id() -> int:
 
 def is_staff(member: discord.Member) -> bool:
     role_id = configured_staff_role_id()
-    return member.guild_permissions.manage_channels or (role_id != 0 and any(role.id == role_id for role in member.roles))
+    return member.guild_permissions.administrator or member.guild_permissions.manage_channels or (role_id != 0 and any(role.id == role_id for role in member.roles))
 
 
 def is_owner(member: discord.Member) -> bool:
@@ -94,7 +94,7 @@ def is_owner_or_admin(member: discord.Member) -> bool:
 
 def owner_only():
     async def predicate(interaction: discord.Interaction) -> bool:
-        return isinstance(interaction.user, discord.Member) and is_owner(interaction.user)
+        return isinstance(interaction.user, discord.Member) and is_owner_or_admin(interaction.user)
     return app_commands.check(predicate)
 
 
@@ -495,8 +495,8 @@ async def ticket_set_staff(interaction: discord.Interaction, role: discord.Role)
 
 @ticket_set.command(name="owner", description="Jadikan akun yang menjalankan command sebagai Owner bot")
 async def ticket_set_owner(interaction: discord.Interaction):
-    if not isinstance(interaction.user, discord.Member) or not (interaction.user.guild.owner_id == interaction.user.id or is_owner(interaction.user)):
-        return await interaction.response.send_message("Hanya Owner server yang dapat mengatur Owner bot.", ephemeral=True)
+    if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
+        return await interaction.response.send_message("Hanya Owner atau Administrator server yang dapat mengatur Owner bot.", ephemeral=True)
     BOT_CONFIG["owner_id"] = interaction.user.id
     save_config()
     await interaction.response.send_message(f"Akun {interaction.user.mention} sekarang menjadi Owner bot Elio Market.", ephemeral=True)
