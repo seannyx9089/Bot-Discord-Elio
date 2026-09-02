@@ -27,6 +27,7 @@ GOODBYE_CHANNEL_ID = int(os.getenv("GOODBYE_CHANNEL_ID", "0"))
 TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID", "0"))
 STAFF_ROLE_ID = int(os.getenv("STAFF_ROLE_ID", "0"))
 DATA_FILE = Path(os.getenv("DATA_FILE", "data/store.json"))
+CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "data/config.json"))
 
 COLORS = {"open": discord.Color.green(), "closed": discord.Color.red()}
 TICKET_TYPES = {
@@ -58,14 +59,33 @@ def clean_name(name: str) -> str:
     return re.sub(r"-+", "-", value).strip("-")[:18] or "member"
 
 
+def load_config() -> dict:
+    try:
+        return json.loads(CONFIG_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+BOT_CONFIG = load_config()
+
+
+def save_config() -> None:
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(BOT_CONFIG, indent=2))
+
+
+def configured_staff_role_id() -> int:
+    return int(BOT_CONFIG.get("staff_role_id", STAFF_ROLE_ID) or 0)
+
+
 def is_staff(member: discord.Member) -> bool:
-    return member.guild_permissions.manage_channels or (
-        STAFF_ROLE_ID != 0 and any(role.id == STAFF_ROLE_ID for role in member.roles)
-    )
+    role_id = configured_staff_role_id()
+    return member.guild_permissions.manage_channels or (role_id != 0 and any(role.id == role_id for role in member.roles))
 
 
 def is_owner(member: discord.Member) -> bool:
-    return member.guild.owner_id == member.id
+    configured_owner_id = int(BOT_CONFIG.get("owner_id", 0) or 0)
+    return member.id == (configured_owner_id or member.guild.owner_id)
 
 
 def is_owner_or_admin(member: discord.Member) -> bool:
@@ -236,7 +256,8 @@ class TicketSelect(discord.ui.Select):
         category = interaction.guild.get_channel(TICKET_CATEGORY_ID) if TICKET_CATEGORY_ID else None
         if TICKET_CATEGORY_ID and not isinstance(category, discord.CategoryChannel):
             return await interaction.edit_original_response(content="`TICKET_CATEGORY_ID` salah atau bot tidak dapat melihat kategori tersebut. Masukkan ID kategori Discord yang benar di Railway Variables.")
-        staff_role = interaction.guild.get_role(STAFF_ROLE_ID) if STAFF_ROLE_ID else None
+        staff_role_id = configured_staff_role_id()
+        staff_role = interaction.guild.get_role(staff_role_id) if staff_role_id else None
         bot_member = interaction.guild.me
         if bot_member is None:
             return await interaction.edit_original_response(content="Bot tidak terdeteksi sebagai member server. Pastikan bot masih berada di server.")
@@ -471,6 +492,30 @@ async def test_goodbye(interaction: discord.Interaction, member: discord.Member 
     await interaction.response.send_message("Contoh goodbye berhasil dikirim.", ephemeral=True)
 
 
+ticket = app_commands.Group(name="ticket", description="Pengaturan ticket Elio Market")
+ticket_set = app_commands.Group(name="set", description="Atur Owner dan role staff ticket")
+
+
+@ticket_set.command(name="staff", description="Atur role staff ticket")
+@owner_only()
+async def ticket_set_staff(interaction: discord.Interaction, role: discord.Role):
+    BOT_CONFIG["staff_role_id"] = role.id
+    save_config()
+    await interaction.response.send_message(f"Role staff berhasil diatur ke {role.mention}.", ephemeral=True)
+
+
+@ticket_set.command(name="owner", description="Jadikan akun yang menjalankan command sebagai Owner bot")
+async def ticket_set_owner(interaction: discord.Interaction):
+    if not isinstance(interaction.user, discord.Member) or not (interaction.user.guild.owner_id == interaction.user.id or is_owner(interaction.user)):
+        return await interaction.response.send_message("Hanya Owner server yang dapat mengatur Owner bot.", ephemeral=True)
+    BOT_CONFIG["owner_id"] = interaction.user.id
+    save_config()
+    await interaction.response.send_message(f"Akun {interaction.user.mention} sekarang menjadi Owner bot Elio Market.", ephemeral=True)
+
+
+ticket.add_command(ticket_set)
+
+
 market = app_commands.Group(name="market", description="Kontrol status toko Elio Market")
 
 
@@ -505,6 +550,7 @@ async def setup_ticket(interaction: discord.Interaction):
     await interaction.response.send_message("Panel ticket berhasil dikirim.", ephemeral=True)
 
 
+bot.tree.add_command(ticket, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(market, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(transaction, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(setup, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
