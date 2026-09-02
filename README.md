@@ -41,7 +41,7 @@ Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.
 
 Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu Owner dapat menjalankan `/market open` atau `/market close`, `/setup ticket`, dan `/transaction add` pada channel yang diinginkan.
 
-Semua command pengaturan (`/market`, `/setup`, `/test`, dan `/transaction`) dibatasi hanya untuk Owner server. Member biasa hanya dapat menggunakan panel ticket. Pada form `/transaction add`, Owner mengisi jenis transaksi dan harga; bot otomatis menambahkan ID transaksi, username, member, waktu, dan mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`.
+Semua command pengaturan (`/market`, `/setup`, `/test`, dan `/transaction`) dibatasi hanya untuk Owner server. Member biasa hanya dapat menggunakan panel ticket. Untuk mencatat transaksi, Owner menjalankan `/transaction add` di dalam ticket tipe **Beli**. Owner mengisi jenis transaksi dan harga; bot otomatis mengambil pembeli dari pemilik ticket, lalu menambahkan ID transaksi, username pembeli, ticket sumber, waktu, dan mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`.
 
 ## Catatan penting
 
