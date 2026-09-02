@@ -64,7 +64,11 @@ def init_db() -> None:
             cursor.execute("CREATE TABLE IF NOT EXISTS bot_config (config_key VARCHAR(100) PRIMARY KEY, config_value VARCHAR(255) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS store_state (id TINYINT PRIMARY KEY, status VARCHAR(20) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY, transaction_code VARCHAR(40) UNIQUE NOT NULL, buyer_id BIGINT NOT NULL, buyer_name VARCHAR(255) NOT NULL, product VARCHAR(255) NOT NULL, price BIGINT NOT NULL, staff_id BIGINT NOT NULL, staff_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'PENDING')")
-            cursor.execute("CREATE TABLE IF NOT EXISTS ratings (id BIGINT AUTO_INCREMENT PRIMARY KEY, guild_id BIGINT NOT NULL, user_id BIGINT NOT NULL, score TINYINT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS ratings (id BIGINT AUTO_INCREMENT PRIMARY KEY, guild_id BIGINT NOT NULL, user_id BIGINT NOT NULL, score TINYINT NOT NULL, note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            try:
+                cursor.execute("ALTER TABLE ratings ADD COLUMN note TEXT")
+            except pymysql.MySQLError:
+                pass
     finally:
         conn.close()
 
@@ -116,13 +120,13 @@ def save_transaction(code: str, buyer: discord.Member, product: str, price: int,
         conn.close()
 
 
-def save_rating(guild_id: int, user_id: int, score: int) -> None:
+def save_rating(guild_id: int, user_id: int, score: int, note: str) -> None:
     conn = mysql_connection()
     if not conn:
         return
     try:
         with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO ratings (guild_id, user_id, score) VALUES (%s, %s, %s)", (guild_id, user_id, score))
+            cursor.execute("INSERT INTO ratings (guild_id, user_id, score, note) VALUES (%s, %s, %s, %s)", (guild_id, user_id, score, note))
     except pymysql.MySQLError as error:
         log.warning("MySQL rating write failed: %s", error)
     finally:
@@ -242,6 +246,35 @@ async def make_transcript(channel: discord.TextChannel) -> bytes:
     return html.encode("utf-8")
 
 
+class RatingModal(discord.ui.Modal, title="Berikan Catatan Rating"):
+    note = discord.ui.TextInput(
+        label="Catatan customer",
+        placeholder="Tulis pengalaman atau masukan kamu...",
+        style=discord.TextStyle.paragraph,
+        max_length=1000,
+        required=False,
+    )
+
+    def __init__(self, score: int, rating_view: "RatingView", origin_message: discord.Message):
+        super().__init__()
+        self.score = score
+        self.rating_view = rating_view
+        self.origin_message = origin_message
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = bot.get_guild(GUILD_ID) if GUILD_ID else None
+        rating_channel = guild.get_channel(RATING_CHANNEL_ID) if guild and RATING_CHANNEL_ID else None
+        note = self.note.value.strip() or "Tidak ada catatan."
+        guild_id = guild.id if guild else 0
+        save_rating(guild_id, interaction.user.id, self.score, note)
+        if isinstance(rating_channel, discord.TextChannel):
+            await rating_channel.send(f"⭐ Rating ticket: **{self.score}/5** dari {interaction.user.mention} (`{interaction.user}`)\n📝 Catatan: {note}")
+        await interaction.response.send_message(f"Terima kasih, rating **{self.score}/5** dan catatan kamu sudah diterima.", ephemeral=True)
+        for child in self.rating_view.children:
+            child.disabled = True
+        await self.origin_message.edit(view=self.rating_view)
+
+
 class RatingView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=86400)
@@ -252,16 +285,9 @@ class RatingView(discord.ui.View):
 
     def make_callback(self, score: int):
         async def callback(interaction: discord.Interaction):
-            guild = bot.get_guild(GUILD_ID) if GUILD_ID else None
-            channel = guild.get_channel(RATING_CHANNEL_ID) if guild and RATING_CHANNEL_ID else None
-            if interaction.guild:
-                save_rating(interaction.guild.id, interaction.user.id, score)
-            if isinstance(channel, discord.TextChannel):
-                await channel.send(f"⭐ Rating ticket: **{score}/5** dari {interaction.user.mention} (`{interaction.user}`)")
-            await interaction.response.send_message(f"Terima kasih, rating kamu **{score}/5** sudah diterima.", ephemeral=True)
-            for child in self.children:
-                child.disabled = True
-            await interaction.message.edit(view=self)
+            if not interaction.message:
+                return await interaction.response.send_message("Pesan rating sudah tidak tersedia.", ephemeral=True)
+            await interaction.response.send_modal(RatingModal(score, self, interaction.message))
         return callback
 
 
