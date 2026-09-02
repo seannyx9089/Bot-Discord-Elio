@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from html import escape
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ log = logging.getLogger("elio-market")
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 STORE_CHANNEL_ID = int(os.getenv("STORE_CHANNEL_ID", "0"))
+TRANSACTION_CHANNEL_ID = int(os.getenv("TRANSACTION_CHANNEL_ID", "0"))
 WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
 GOODBYE_CHANNEL_ID = int(os.getenv("GOODBYE_CHANNEL_ID", "0"))
 TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID", "0"))
@@ -58,6 +60,16 @@ def is_staff(member: discord.Member) -> bool:
     return member.guild_permissions.manage_channels or (
         STAFF_ROLE_ID != 0 and any(role.id == STAFF_ROLE_ID for role in member.roles)
     )
+
+
+def is_owner(member: discord.Member) -> bool:
+    return member.guild.owner_id == member.id
+
+
+def owner_only():
+    async def predicate(interaction: discord.Interaction) -> bool:
+        return isinstance(interaction.user, discord.Member) and is_owner(interaction.user)
+    return app_commands.check(predicate)
 
 
 intents = discord.Intents.default()
@@ -221,6 +233,52 @@ async def publish_store(guild: discord.Guild | None, status: str):
     await channel.send(embed=embed)
 
 
+class TransactionModal(discord.ui.Modal, title="Catat Transaksi Elio Market"):
+    transaction_type = discord.ui.TextInput(
+        label="Jenis transaksi",
+        placeholder="Contoh: Pembelian Nitro / Hosting / Jual Produk",
+        max_length=100,
+        required=True,
+    )
+    price = discord.ui.TextInput(
+        label="Harga",
+        placeholder="Contoh: 50000 atau Rp 50.000",
+        max_length=30,
+        required=True,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member) or not is_owner(interaction.user):
+            return await interaction.response.send_message("Hanya Owner server yang dapat mencatat transaksi.", ephemeral=True)
+        channel = interaction.guild.get_channel(TRANSACTION_CHANNEL_ID) if interaction.guild and TRANSACTION_CHANNEL_ID else interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            return await interaction.response.send_message("`TRANSACTION_CHANNEL_ID` belum benar atau channel transaksi tidak ditemukan.", ephemeral=True)
+        raw_price = self.price.value.strip().replace("Rp", "").replace("rp", "").replace(" ", "").replace(".", "").replace(",", "")
+        if not raw_price.isdigit():
+            return await interaction.response.send_message("Format harga tidak valid. Gunakan contoh `50000` atau `Rp 50.000`.", ephemeral=True)
+        amount = int(raw_price)
+        transaction_id = f"TRX-{datetime.now(timezone.utc):%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+        embed = discord.Embed(title="💳 Transaksi Baru", color=discord.Color.green(), timestamp=datetime.now(timezone.utc))
+        embed.add_field(name="ID Transaksi", value=f"`{transaction_id}`", inline=False)
+        embed.add_field(name="Jenis Transaksi", value=self.transaction_type.value, inline=False)
+        embed.add_field(name="Harga", value=f"Rp {amount:,}".replace(",", "."), inline=True)
+        embed.add_field(name="Dicatat oleh", value=f"{interaction.user.mention}\n`{interaction.user.name}`", inline=True)
+        embed.add_field(name="Waktu", value=now_text(), inline=False)
+        embed.set_footer(text="Elio Market • Transaction Log")
+        await channel.send(embed=embed)
+        await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat.", ephemeral=True)
+
+
+transaction = app_commands.Group(name="transaction", description="Catat transaksi Elio Market")
+
+
+@transaction.command(name="add", description="Catat transaksi baru melalui form")
+async def transaction_add(interaction: discord.Interaction):
+    if not isinstance(interaction.user, discord.Member) or not is_owner(interaction.user):
+        return await interaction.response.send_message("Hanya Owner server yang dapat mencatat transaksi.", ephemeral=True)
+    await interaction.response.send_modal(TransactionModal())
+
+
 @bot.event
 async def on_ready():
     bot.add_view(StoreView())
@@ -280,7 +338,7 @@ test = app_commands.Group(name="test", description="Uji coba pesan welcome dan g
 
 
 @test.command(name="welcome", description="Kirim contoh pesan welcome")
-@app_commands.checks.has_permissions(administrator=True)
+@owner_only()
 async def test_welcome(interaction: discord.Interaction, member: discord.Member | None = None):
     target = member or interaction.user
     if not isinstance(target, discord.Member):
@@ -290,7 +348,7 @@ async def test_welcome(interaction: discord.Interaction, member: discord.Member 
 
 
 @test.command(name="goodbye", description="Kirim contoh pesan goodbye")
-@app_commands.checks.has_permissions(administrator=True)
+@owner_only()
 async def test_goodbye(interaction: discord.Interaction, member: discord.Member | None = None):
     target = member or interaction.user
     if not isinstance(target, discord.Member):
@@ -303,7 +361,7 @@ market = app_commands.Group(name="market", description="Kontrol status toko Elio
 
 
 @market.command(name="open", description="Buka Elio Market")
-@app_commands.checks.has_permissions(administrator=True)
+@owner_only()
 async def market_open(interaction: discord.Interaction):
     save_state("open")
     await publish_store(interaction.guild, "open")
@@ -311,7 +369,7 @@ async def market_open(interaction: discord.Interaction):
 
 
 @market.command(name="close", description="Tutup Elio Market")
-@app_commands.checks.has_permissions(administrator=True)
+@owner_only()
 async def market_close(interaction: discord.Interaction):
     save_state("closed")
     await publish_store(interaction.guild, "closed")
@@ -321,16 +379,8 @@ async def market_close(interaction: discord.Interaction):
 setup = app_commands.Group(name="setup", description="Pengaturan panel Elio Market")
 
 
-@setup.command(name="store", description="Kirim panel kontrol status toko")
-@app_commands.checks.has_permissions(administrator=True)
-async def setup_store(interaction: discord.Interaction):
-    embed = discord.Embed(title="Elio Market • Store Control", description="Gunakan tombol di bawah untuk membuka atau menutup toko.", color=discord.Color.blurple())
-    await interaction.channel.send(embed=embed, view=StoreView())
-    await interaction.response.send_message("Panel kontrol toko berhasil dikirim.", ephemeral=True)
-
-
 @setup.command(name="ticket", description="Kirim panel pembuatan ticket")
-@app_commands.checks.has_permissions(administrator=True)
+@owner_only()
 async def setup_ticket(interaction: discord.Interaction):
     embed = discord.Embed(title="Elio Market • Ticket Center", description="Pilih kategori ticket yang sesuai dengan kebutuhanmu. Jangan membuat ticket berulang untuk masalah yang sama.", color=discord.Color.blurple())
     embed.add_field(name="🛒 Beli", value="Membeli produk atau layanan.", inline=False)
@@ -341,22 +391,16 @@ async def setup_ticket(interaction: discord.Interaction):
     await interaction.response.send_message("Panel ticket berhasil dikirim.", ephemeral=True)
 
 
-@setup.command(name="status", description="Kirim status toko saat ini")
-@app_commands.checks.has_permissions(administrator=True)
-async def setup_status(interaction: discord.Interaction):
-    await publish_store(interaction.guild, load_state())
-    await interaction.response.send_message("Status toko berhasil dikirim.", ephemeral=True)
-
-
 bot.tree.add_command(market, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
+bot.tree.add_command(transaction, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(setup, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(test, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.MissingPermissions):
-        message = "Perintah ini hanya dapat digunakan oleh administrator."
+    if isinstance(error, app_commands.MissingPermissions) or isinstance(error, app_commands.CheckFailure):
+        message = "Perintah ini hanya dapat digunakan oleh Owner server."
     else:
         log.exception("Command error", exc_info=error)
         message = "Terjadi kesalahan saat menjalankan perintah. Periksa konfigurasi bot."

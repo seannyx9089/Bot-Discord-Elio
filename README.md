@@ -4,7 +4,7 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 ## Fitur yang tersedia
 
-Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Command `/setup store` tetap tersedia sebagai panel alternatif dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
+Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner dapat mencatat transaksi melalui `/transaction add`.
 
 Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat mengambil ticket dengan tombol **Claim Ticket** atau menutupnya dengan tombol **Tutup Ticket**. Saat ticket ditutup, bot membuat transcript HTML dari seluruh chat dan mengirimkannya melalui DM kepada pemilik ticket.
 
@@ -25,6 +25,7 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 | `DISCORD_TOKEN` | Token bot dari Discord Developer Portal. |
 | `GUILD_ID` | ID server Discord. Jika diisi, slash command tersinkron lebih cepat ke server tersebut. |
 | `STORE_CHANNEL_ID` | Channel untuk mengirim status toko. |
+| `TRANSACTION_CHANNEL_ID` | Channel privat untuk menyimpan log transaksi. |
 | `WELCOME_CHANNEL_ID` | Channel welcome member baru. |
 | `GOODBYE_CHANNEL_ID` | Channel goodbye member yang keluar. |
 | `TICKET_CATEGORY_ID` | Kategori tempat channel ticket dibuat. |
@@ -38,7 +39,9 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 
 Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.env.example`, dan `README.md`. Jangan unggah file `.env` atau token. Di Railway, pilih **New Project**, kemudian **Deploy from GitHub Repo** dan pilih repository tersebut. Railway akan membaca `requirements.txt` dan menjalankan proses dari `Procfile`.
 
-Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu administrator dapat menjalankan `/market open` atau `/market close`, kemudian menjalankan `/setup ticket` pada channel yang diinginkan.
+Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu Owner dapat menjalankan `/market open` atau `/market close`, `/setup ticket`, dan `/transaction add` pada channel yang diinginkan.
+
+Semua command pengaturan (`/market`, `/setup`, `/test`, dan `/transaction`) dibatasi hanya untuk Owner server. Member biasa hanya dapat menggunakan panel ticket. Pada form `/transaction add`, Owner mengisi jenis transaksi dan harga; bot otomatis menambahkan ID transaksi, username, member, waktu, dan mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`.
 
 ## Catatan penting
 
