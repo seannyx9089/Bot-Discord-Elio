@@ -37,9 +37,9 @@ def now_text() -> str:
 
 def load_state() -> str:
     try:
-        return json.loads(DATA_FILE.read_text()).get("status", "closed")
+        return json.loads(DATA_FILE.read_text()).get("status", os.getenv("STORE_DEFAULT_STATUS", "open"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return "closed"
+        return os.getenv("STORE_DEFAULT_STATUS", "open")
 
 
 def save_state(status: str) -> None:
@@ -244,6 +244,22 @@ async def test_goodbye(interaction: discord.Interaction, member: discord.Member 
     await interaction.response.send_message("Contoh goodbye berhasil dikirim.", ephemeral=True)
 
 
+store = app_commands.Group(name="store", description="Kontrol status toko Elio Market")
+
+
+@store.command(name="status", description="Buka atau tutup Elio Market")
+@app_commands.choices(status=[
+    app_commands.Choice(name="open", value="open"),
+    app_commands.Choice(name="close", value="close"),
+])
+@app_commands.checks.has_permissions(administrator=True)
+async def store_status(interaction: discord.Interaction, status: app_commands.Choice[str]):
+    save_state(status.value)
+    await publish_store(interaction.guild, status.value)
+    label = "OPEN" if status.value == "open" else "CLOSED"
+    await interaction.response.send_message(f"Status Elio Market berhasil diubah menjadi **{label}**.", ephemeral=True)
+
+
 setup = app_commands.Group(name="setup", description="Pengaturan panel Elio Market")
 
 
@@ -274,6 +290,7 @@ async def setup_status(interaction: discord.Interaction):
     await interaction.response.send_message("Status toko berhasil dikirim.", ephemeral=True)
 
 
+bot.tree.add_command(store, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(setup, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 bot.tree.add_command(test, guild=discord.Object(id=GUILD_ID) if GUILD_ID else None)
 

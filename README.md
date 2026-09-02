@@ -4,7 +4,7 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 ## Fitur yang tersedia
 
-Bot menyediakan tiga perintah pengaturan administrator. Perintah `/setup store` mengirim panel kontrol dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
+Bot menyediakan command status toko langsung: `/store status open` untuk membuka toko dan `/store status close` untuk menutup toko. Command `/setup store` tetap tersedia sebagai panel alternatif dengan tombol **Buka Toko** dan **Tutup Toko**. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Perintah `/setup status` mengirim status toko terakhir yang tersimpan.
 
 Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat menutup ticket dengan tombol **Tutup Ticket**.
 
@@ -32,16 +32,17 @@ Salin `.env.example` sebagai referensi. Di Railway, tambahkan setiap pasangan na
 | `WELCOME_IMAGE_URL` | Opsional, URL gambar welcome langsung. |
 | `GOODBYE_IMAGE_URL` | Opsional, URL gambar goodbye langsung. |
 | `DATA_FILE` | Opsional; default `data/store.json`. |
+| `STORE_DEFAULT_STATUS` | Opsional; status awal jika data belum tersimpan. Default `open`. |
 
 ## Deployment melalui GitHub dan Railway
 
 Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.env.example`, dan `README.md`. Jangan unggah file `.env` atau token. Di Railway, pilih **New Project**, kemudian **Deploy from GitHub Repo** dan pilih repository tersebut. Railway akan membaca `requirements.txt` dan menjalankan proses dari `Procfile`.
 
-Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu jalankan `/setup store` dan `/setup ticket` pada channel yang diinginkan. Kedua perintah tersebut hanya dapat digunakan oleh administrator.
+Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu administrator dapat menjalankan `/store status open` atau `/store status close`, kemudian menjalankan `/setup ticket` pada channel yang diinginkan.
 
 ## Catatan penting
 
-Status toko disimpan dalam `data/store.json`. Pada Railway, filesystem service dapat bersifat sementara ketika container dibuat ulang, sehingga status awal dapat kembali ke `CLOSED`. Fitur utama bot tetap berjalan, tetapi bila status harus permanen lintas redeploy, tahap berikutnya dapat ditambahkan database atau penyimpanan eksternal.
+Status toko disimpan dalam `data/store.json`. Pada Railway, filesystem service dapat bersifat sementara ketika container dibuat ulang, sehingga status awal akan mengikuti `STORE_DEFAULT_STATUS` dan default-nya adalah `OPEN`. Fitur utama bot tetap berjalan, tetapi bila status harus permanen lintas redeploy, tahap berikutnya dapat ditambahkan database atau penyimpanan eksternal.
 
 Gambar contoh yang sudah dikirim dapat dijadikan referensi gaya embed status toko. Setelah contoh welcome/goodbye dikirim, teks, warna, judul, footer, dan layout embed dapat disesuaikan agar konsisten dengan branding Elio Market.
 
