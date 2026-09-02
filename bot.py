@@ -23,6 +23,7 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 STORE_CHANNEL_ID = int(os.getenv("STORE_CHANNEL_ID", "0"))
 TRANSACTION_CHANNEL_ID = int(os.getenv("TRANSACTION_CHANNEL_ID", "0"))
 RATING_CHANNEL_ID = int(os.getenv("RATING_CHANNEL_ID", "0"))
+STAFF_TRANSCRIPT_CHANNEL_ID = int(os.getenv("STAFF_TRANSCRIPT_CHANNEL_ID", "0"))
 AUTO_CLOSE_HOURS = float(os.getenv("AUTO_CLOSE_HOURS", "72"))
 WELCOME_CHANNEL_ID = int(os.getenv("WELCOME_CHANNEL_ID", "0"))
 GOODBYE_CHANNEL_ID = int(os.getenv("GOODBYE_CHANNEL_ID", "0"))
@@ -330,7 +331,19 @@ class CloseTicketView(discord.ui.View):
                     dm_sent = True
                 except discord.HTTPException:
                     dm_sent = False
-        await interaction.edit_original_response(content=("Transcript berhasil dikirim ke DM pemilik ticket. Ticket akan ditutup dalam 5 detik." if dm_sent else "Ticket akan ditutup dalam 5 detik, tetapi DM transcript gagal dikirim. Pastikan DM pemilik ticket terbuka."))
+        staff_channel = interaction.guild.get_channel(STAFF_TRANSCRIPT_CHANNEL_ID) if interaction.guild and STAFF_TRANSCRIPT_CHANNEL_ID else None
+        staff_archive_sent = False
+        if isinstance(staff_channel, discord.TextChannel):
+            try:
+                archive_embed = discord.Embed(title="📁 Transcript Ticket Ditutup", description=f"Ticket: `{channel.name}`\nDitutup oleh: {interaction.user.mention}\nBuyer ID: `{owner_id or 'tidak ditemukan'}`", color=discord.Color.blurple(), timestamp=datetime.now(timezone.utc))
+                await staff_channel.send(embed=archive_embed, file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"))
+                staff_archive_sent = True
+            except discord.HTTPException as error:
+                log.warning("Staff transcript archive failed: %s", error)
+        result_text = "Transcript dikirim ke DM buyer"
+        if staff_archive_sent:
+            result_text += " dan channel arsip staff"
+        await interaction.edit_original_response(content=result_text + ". Ticket akan ditutup dalam 5 detik." if dm_sent else "Ticket akan ditutup dalam 5 detik, tetapi DM buyer gagal dikirim.")
         await asyncio.sleep(5)
         await channel.delete(reason=f"Ticket ditutup oleh {interaction.user}")
 
@@ -486,6 +499,13 @@ async def auto_close_tickets():
             if owner:
                 try:
                     await owner.send(content=f"Ticket **#{channel.name}** ditutup otomatis karena tidak aktif. Transcript terlampir.", file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"), view=RatingView())
+                except discord.HTTPException:
+                    pass
+            staff_channel = category.guild.get_channel(STAFF_TRANSCRIPT_CHANNEL_ID) if STAFF_TRANSCRIPT_CHANNEL_ID else None
+            if isinstance(staff_channel, discord.TextChannel):
+                try:
+                    archive_embed = discord.Embed(title="📁 Transcript Ticket Auto-Closed", description=f"Ticket: `{channel.name}`\nAlasan: Tidak aktif selama {AUTO_CLOSE_HOURS} jam", color=discord.Color.orange(), timestamp=datetime.now(timezone.utc))
+                    await staff_channel.send(embed=archive_embed, file=discord.File(io.BytesIO(transcript), filename=f"transcript-{channel.name}.html"))
                 except discord.HTTPException:
                     pass
             await channel.delete(reason=f"Auto-close setelah {AUTO_CLOSE_HOURS} jam tidak aktif")
