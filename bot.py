@@ -281,7 +281,7 @@ class TicketSelect(discord.ui.Select):
                 mentions.append(f"<@{owner_id}>")
             if staff_role:
                 mentions.append(staff_role.mention)
-            await channel.send(content=" ".join(mentions) + "\nTicket baru telah dibuat. Silakan segera ditangani.", embed=embed, view=CloseTicketView(), allowed_mentions=discord.AllowedMentions(users=True, roles=True))
+            await channel.send(content=" ".join(mentions), embed=embed, view=CloseTicketView(), allowed_mentions=discord.AllowedMentions(users=True, roles=True))
         except discord.Forbidden:
             return await interaction.edit_original_response(content="Bot tidak memiliki permission untuk membuat ticket. Berikan **Manage Channels**, **View Channel**, **Send Messages**, dan **Embed Links** pada bot/kategori ticket.")
         except discord.HTTPException as error:
