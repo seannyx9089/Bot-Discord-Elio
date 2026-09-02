@@ -473,11 +473,31 @@ transaction = app_commands.Group(name="transaction", description="Catat transaks
 
 
 @transaction.command(name="add", description="Catat transaksi dengan Buyer, Produk, dan Harga")
-async def transaction_add(interaction: discord.Interaction, buyer: discord.Member):
+@app_commands.describe(buyer="Pilih Buyer", product="Nama produk", price="Harga, contoh 19000 atau Rp 19.000")
+async def transaction_add(interaction: discord.Interaction, buyer: discord.Member, product: str, price: str):
     if not isinstance(interaction.user, discord.Member) or not is_owner_or_admin(interaction.user):
         return await interaction.response.send_message("Hanya Owner atau Administrator server yang dapat mencatat transaksi.", ephemeral=True)
+    raw_price = price.strip().replace("Rp", "").replace("rp", "").replace(" ", "").replace(".", "").replace(",", "")
+    if not raw_price.isdigit():
+        return await interaction.response.send_message("Format harga tidak valid. Gunakan contoh `19000` atau `Rp 19.000`.", ephemeral=True)
+    channel = interaction.guild.get_channel(TRANSACTION_CHANNEL_ID) if interaction.guild and TRANSACTION_CHANNEL_ID else interaction.channel
+    if not isinstance(channel, discord.TextChannel):
+        return await interaction.response.send_message("`TRANSACTION_CHANNEL_ID` belum benar atau channel transaksi tidak ditemukan.", ephemeral=True)
     source_ticket = interaction.channel if isinstance(interaction.channel, discord.TextChannel) and interaction.channel.name.startswith("buy-") else None
-    await interaction.response.send_modal(TransactionModal(buyer, source_ticket))
+    amount = int(raw_price)
+    transaction_id = f"TRX-{datetime.now(timezone.utc):%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+    embed = discord.Embed(title="💳 Transaksi Baru", color=discord.Color.orange(), timestamp=datetime.now(timezone.utc))
+    embed.add_field(name="ID Transaksi", value=f"`{transaction_id}`", inline=False)
+    embed.add_field(name="🛒 Buyer", value=f"{buyer.mention}\n`{buyer.name}`", inline=True)
+    embed.add_field(name="📦 Produk", value=product, inline=True)
+    embed.add_field(name="💰 Harga", value=f"Rp {amount:,}".replace(",", "."), inline=True)
+    embed.add_field(name="👤 Staff", value=f"{interaction.user.mention}\n`{interaction.user.name}`", inline=True)
+    if source_ticket:
+        embed.add_field(name="Ticket", value=f"{source_ticket.mention}\n`{source_ticket.name}`", inline=True)
+    embed.set_footer(text="Elio Market • Menunggu Persetujuan Admin")
+    save_transaction(transaction_id, buyer, product, amount, interaction.user)
+    await channel.send(embed=embed, view=TransactionApprovalView())
+    await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat dan menunggu persetujuan admin.", ephemeral=True)
 
 
 @tasks.loop(hours=1)
