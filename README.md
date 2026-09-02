@@ -4,10 +4,10 @@ Bot Discord untuk operasional toko **Elio Market**. Project ini menyediakan pane
 
 ## Fitur yang tersedia
 
-Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner atau Administrator dapat mencatat transaksi melalui `/transaction add`.
+Bot menyediakan command status toko langsung: `/market open` untuk membuka toko dan `/market close` untuk menutup toko. Perintah `/setup ticket` mengirim panel ticket yang dapat digunakan member. Owner atau Administrator dapat mencatat log transaksi berhasil melalui `/transaction add`.
 
 Saat member bergabung atau keluar, bot mengirim embed ke channel yang telah dikonfigurasi. Embed menggunakan **avatar profil member sebagai gambar thumbnail**, serta menampilkan mention member, username, dan jumlah total member. Setiap ticket dibuat sebagai channel privat; pemilik ticket dan role staff dapat melihatnya. Staff dapat mengambil ticket dengan tombol **Claim Ticket** atau menutupnya dengan tombol **Tutup Ticket**. Saat ticket ditutup, bot membuat transcript HTML dari seluruh chat dan mengirimkannya melalui DM kepada pemilik ticket bersama tombol rating 1–5. Setelah customer memilih nilai, bot menampilkan form untuk menulis catatan atau ulasan. Salinan transcript HTML juga dikirim ke `STAFF_TRANSCRIPT_CHANNEL_ID` untuk arsip staff. Nilai dan catatan rating dikirim ke `RATING_CHANNEL_ID` serta disimpan di MySQL.
- Ticket yang tidak aktif akan ditutup otomatis sesuai `AUTO_CLOSE_HOURS`, dengan default 72 jam. Transaksi baru dikirim dengan status menunggu persetujuan dan memiliki tombol Terima/Tolak untuk Owner atau Administrator.
+ Ticket yang tidak aktif akan ditutup otomatis sesuai `AUTO_CLOSE_HOURS`, dengan default 72 jam. Transaksi langsung dikirim sebagai log **Transaksi Berhasil** tanpa tombol approval.
 
 Untuk menguji tampilan tanpa menunggu member masuk atau keluar, administrator dapat menggunakan `/test welcome` dan `/test goodbye`. Target member dapat dipilih sebagai opsi command; jika dikosongkan, bot menggunakan akun administrator yang menjalankan command. Pemilik ticket harus membuka DM dari server agar transcript dapat diterima.
 
@@ -52,7 +52,8 @@ Buat repository GitHub baru, unggah `bot.py`, `requirements.txt`, `Procfile`, `.
 
 Setelah variables dimasukkan, lakukan deploy ulang. Buka log deployment dan pastikan terlihat pesan bahwa bot berhasil login serta slash command berhasil tersinkron. Setelah itu Owner dapat menjalankan `/market open` atau `/market close`, `/setup ticket`, dan `/transaction add` pada channel yang diinginkan.
 
-Seluruh command bot dibatasi untuk Owner atau Administrator server. Member biasa tidak dapat menggunakan command, tetapi tetap dapat membuat ticket melalui panel. Pada command `/transaction add`, admin memilih Buyer langsung dari opsi member Discord, lalu mengisi nama Produk dan Harga pada command. Bot otomatis menambahkan ID transaksi, Staff dari akun yang menjalankan command, serta waktu, lalu mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`. Jika command dijalankan di dalam ticket Beli, nama ticket sumber juga ikut dicatat.
+Seluruh command bot dibatasi untuk Owner atau Administrator server. Member biasa tidak dapat menggunakan command, tetapi tetap dapat membuat ticket melalui panel. Pada command `/transaction add`, admin memilih Buyer langsung dari opsi member Discord, lalu mengisi nama Produk dan Harga pada command. Bot otomatis menambahkan nomor transaksi, Staff dari akun yang menjalankan command, serta waktu, lalu mengirim hasilnya ke `TRANSACTION_CHANNEL_ID`.
+ Jika command dijalankan di dalam ticket Beli, nama ticket sumber juga ikut dicatat.
 
 Konfigurasi dari HP dapat dilakukan melalui `/ticket set owner` untuk menjadikan akun yang menjalankan command sebagai Owner bot, lalu `/ticket set staff role` dengan memilih role dari daftar Discord. Cara ini tidak memerlukan penyalinan Role ID secara manual.
 

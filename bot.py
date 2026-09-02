@@ -107,15 +107,17 @@ def save_state(status: str) -> None:
     DATA_FILE.write_text(json.dumps({"status": status}, indent=2))
 
 
-def save_transaction(code: str, buyer: discord.Member, product: str, price: int, staff: discord.Member) -> None:
+def save_transaction(code: str, buyer: discord.Member, product: str, price: int, staff: discord.Member) -> int | None:
     conn = mysql_connection()
     if not conn:
-        return
+        return None
     try:
         with conn.cursor() as cursor:
             cursor.execute("INSERT INTO transactions (transaction_code, buyer_id, buyer_name, product, price, staff_id, staff_name) VALUES (%s, %s, %s, %s, %s, %s, %s)", (code, buyer.id, str(buyer), product, price, staff.id, str(staff)))
+            return cursor.lastrowid
     except pymysql.MySQLError as error:
         log.warning("MySQL transaction write failed: %s", error)
+        return None
     finally:
         conn.close()
 
@@ -521,9 +523,13 @@ async def transaction_add(interaction: discord.Interaction, buyer: discord.Membe
     if source_ticket:
         embed.add_field(name="Ticket", value=f"{source_ticket.mention}\n`{source_ticket.name}`", inline=True)
     embed.set_footer(text="Elio Market • Menunggu Persetujuan Admin")
-    save_transaction(transaction_id, buyer, product, amount, interaction.user)
-    await channel.send(embed=embed, view=TransactionApprovalView())
-    await interaction.response.send_message(f"Transaksi `{transaction_id}` berhasil dicatat dan menunggu persetujuan admin.", ephemeral=True)
+    transaction_number = save_transaction(transaction_id, buyer, product, amount, interaction.user)
+    display_number = transaction_number or transaction_id
+    embed.title = f"🧾 Transaksi Berhasil: {display_number}"
+    embed.color = discord.Color.green()
+    embed.set_footer(text=f"Elio Market • Cloud & Digital Service | {datetime.now().strftime('%d/%m/%Y %I:%M %p')}")
+    await channel.send(embed=embed)
+    await interaction.response.send_message(f"Transaksi `{display_number}` berhasil dicatat.", ephemeral=True)
 
 
 @tasks.loop(hours=1)
